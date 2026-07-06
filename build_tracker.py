@@ -333,7 +333,7 @@ FLOORING_CFG = {
     "qty_label": "Boxes needed",
     "unit_prices": [61.71, 97.08, 75.57],
     "qtys": [66, 60, 64],
-    "underlayment": "=13*59.99",
+    "underlayment": "=15*59.99",
     "stair_nose": "=7*29.99",
     "stair_risers": "=13*20",
     "discount_rate": 0.05,
@@ -342,7 +342,7 @@ FLOORING_CFG = {
     "labor_stairs": 1880.00,
     "comparison_notes": {
         "Item # / SKU": "All Floor & Decor. Sapelo Shore & Big Sur: waterproof hybrid resilient plank w/ cork pad, 8mm 7\"x51\". Gunstock Oak: waterproof rigid core LVP.",
-        "Underlayment & supplies": "Sentinel Protect Plus underlayment — 13 rolls x $59.99 (100 sqft each).",
+        "Underlayment & supplies": "Sentinel Protect Plus underlayment — 15 rolls x $59.99 (100 sqft each).",
         "Stair nose trim": "7 stair noses x $29.99.",
         "Stair risers": "13 risers x $20.00.",
         "Contractor discount on materials": "5% off all materials through the flooring contractor.",
@@ -376,6 +376,52 @@ TEMPLATE_CFG = {
     "labor_stairs": "",
     "comparison_notes": {},
 }
+
+
+# ========================================================= project estimates ==
+def build_estimates(ws):
+    """Preliminary quote log — one row per quote, before a project graduates
+    to its own full tab."""
+    ws.sheet_view.showGridLines = False
+    title_bar(ws, "PROJECT ESTIMATES", "4 Indian Brook Road, Ashland, MA 01721")
+
+    ws.cell(row=4, column=1, value="Total estimated — all").font = LABEL_FONT
+    money(ws, 4, 2, "=SUM(E9:E58)")
+    ws.cell(row=5, column=1, value="Total estimated — marked Now").font = LABEL_FONT
+    money(ws, 5, 2, '=SUMIF(F9:F58,"Now",E9:E58)')
+
+    section_bar(ws, 7, "QUOTES")
+    heads = ["Project", "Category", "Contractor / vendor", "Quote date",
+             "Est. cost", "Timing", "Notes"]
+    for col, text in enumerate(heads, start=1):
+        head_cell(ws, 8, col, text)
+
+    starters = [
+        ("HVAC system", "Mechanical"),
+        ("Carpentry work", "Carpentry"),
+    ]
+    for i, (project, category) in enumerate(starters):
+        ws.cell(row=9 + i, column=1, value=project)
+        ws.cell(row=9 + i, column=2, value=category)
+
+    dv_timing = DataValidation(
+        type="list", formula1='"Now,Later,Undecided,Passed"', allow_blank=True
+    )
+    ws.add_data_validation(dv_timing)
+    for r in range(9, 59):
+        for col in range(1, 8):
+            c = ws.cell(row=r, column=col)
+            c.border = BOX
+            if col == 4:
+                c.number_format = DATE_FMT
+            if col == 5:
+                c.number_format = CUR
+        dv_timing.add(f"F{r}")
+
+    widths = {"A": 28, "B": 16, "C": 26, "D": 13, "E": 14, "F": 12, "G": 36}
+    for col, w in widths.items():
+        ws.column_dimensions[col].width = w
+    ws.freeze_panes = "A9"
 
 
 # ============================================================ basis tracker ==
@@ -475,10 +521,11 @@ def build_readme(ws):
         ("", ""),
         ("Basis Tracker", "Purchase price ($1,060,000, closing 7/17/2026) + closing costs + capital improvements = adjusted cost basis. Each project tab feeds one row of the improvements table."),
         ("2nd Floor Flooring", "First project. Compare the 3 Floor & Decor plank options (incl. underlayment, stair nose & risers, 5% contractor discount, est. tax, and Footprints labor), pick one in 'Selected option' (yellow cell), and the budget fills in automatically. Log payments in the cost log at the bottom — actuals and the Basis Tracker update themselves."),
+        ("Project Estimates", "Preliminary phase: log each quote you collect (HVAC, carpentry, etc.) with its estimated cost, and mark Timing (Now / Later / Undecided / Passed) to decide what to take on. When a project is a go, give it its own tab from the template."),
         ("Project Template", "For the next project: right-click the tab > Duplicate, rename it, fill in your options/quotes, then add a row in the Basis Tracker improvements table pointing at the new tab's cell "
                              f"{ACTUAL_TOTAL_CELL} (its Actual total)."),
         ("", ""),
-        ("Sources", "Labor: Footprints Floors of Central MA proposal #25584 (6/30/2026) — $9,057.60, materials excluded. Materials: Floor & Decor Waltham cart (7/2026) — Sapelo Shore / Big Sur / Gunstock Oak + Sentinel underlayment, plus 7 stair noses @ $29.99 and 13 risers @ $20; 5% contractor discount on materials."),
+        ("Sources", "Labor: Footprints Floors of Central MA proposal #25584 (6/30/2026) — $9,057.60, materials excluded. Materials: Floor & Decor Waltham cart (7/2026) — Sapelo Shore / Big Sur / Gunstock Oak + Sentinel underlayment (15 rolls), plus 7 stair noses @ $29.99 and 13 risers @ $20; 5% contractor discount on materials."),
         ("", ""),
         ("Tip", "In Google Sheets everything here — dropdowns, cross-tab formulas, formatting — survives File > Import. Use 'Replace spreadsheet' when importing so tab references stay intact."),
     ]
@@ -497,21 +544,24 @@ def build_readme(ws):
 # ==================================================================== main ==
 def main():
     wb = Workbook()
-    ws_readme = wb.active
-    ws_readme.title = "Read Me"
-    ws_basis = wb.create_sheet("Basis Tracker")
+    ws_basis = wb.active
+    ws_basis.title = "Basis Tracker"
     ws_floor = wb.create_sheet("2nd Floor Flooring")
+    ws_est = wb.create_sheet("Project Estimates")
     ws_tmpl = wb.create_sheet("Project Template")
+    ws_readme = wb.create_sheet("Read Me")
 
-    build_readme(ws_readme)
     build_basis(ws_basis)
     build_project_sheet(ws_floor, FLOORING_CFG)
+    build_estimates(ws_est)
     build_project_sheet(ws_tmpl, TEMPLATE_CFG)
+    build_readme(ws_readme)
 
-    ws_readme.sheet_properties.tabColor = "808080"
     ws_basis.sheet_properties.tabColor = GOLD
     ws_floor.sheet_properties.tabColor = NAVY
+    ws_est.sheet_properties.tabColor = NAVY_LIGHT
     ws_tmpl.sheet_properties.tabColor = "A6A6A6"
+    ws_readme.sheet_properties.tabColor = "808080"
 
     wb.save(OUT)
     print("wrote", OUT)
