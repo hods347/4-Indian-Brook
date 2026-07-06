@@ -45,8 +45,65 @@ SUB_FONT = Font(italic=True, size=10, color="595959")
 SECTION_FONT = Font(bold=True, size=11, color="FFFFFF")
 HEAD_FONT = Font(bold=True, size=10)
 LABEL_FONT = Font(bold=True, size=10)
-NOTE_FONT = Font(italic=True, size = 9, color="595959")
+NOTE_FONT = Font(italic=True, size=9, color="595959")
 TOTAL_FONT = Font(bold=True, size=11)
+
+# ------------------------------------------------------------ project layout --
+# Both project tabs share one deterministic layout so the Basis Tracker can
+# point at a known cell. Comparison labels drive the HLOOKUP offsets below.
+COMPARISON_LABELS = [
+    "Item # / SKU",          # 0
+    "unit",                  # 1  (label text comes from cfg)
+    "qty",                   # 2
+    "Flooring material",     # 3  -- materials block starts here
+    "Underlayment & supplies",
+    "Stair nose trim",
+    "Stair risers",
+    "Contractor discount on materials",
+    "Est. sales tax (6.25% MA, materials)",
+    "Labor — demo & disposal",
+    "Labor — install",
+    "Labor — stairs (treads & risers)",
+    "TOTAL ESTIMATED",
+    "Premium vs. cheapest option",
+]
+# budget categories -> comparison label they pull their number from
+BUDGET_CATEGORIES = [
+    ("Flooring materials", "Flooring material"),
+    ("Underlayment & supplies", "Underlayment & supplies"),
+    ("Stair nose trim", "Stair nose trim"),
+    ("Stair risers", "Stair risers"),
+    ("Contractor discount", "Contractor discount on materials"),
+    ("Sales tax", "Est. sales tax (6.25% MA, materials)"),
+    ("Labor — demo & disposal", "Labor — demo & disposal"),
+    ("Labor — install", "Labor — install"),
+    ("Labor — stairs", "Labor — stairs (treads & risers)"),
+    ("Permits & fees", None),
+    ("Other", None),
+]
+
+COMP_SECTION = 12
+COMP_HEADER = COMP_SECTION + 1                       # 13
+COMP_FIRST = COMP_HEADER + 1                         # 14
+COMP_ROW = {lbl: COMP_FIRST + i for i, lbl in enumerate(COMPARISON_LABELS)}
+COMP_LAST = COMP_ROW["Premium vs. cheapest option"]  # 27
+COMP_TOTAL = COMP_ROW["TOTAL ESTIMATED"]             # 26
+
+BUD_SECTION = COMP_LAST + 2                          # 29
+BUD_HEADER = BUD_SECTION + 1                         # 30
+BUD_FIRST = BUD_HEADER + 1                           # 31
+BUD_LAST_CAT = BUD_FIRST + len(BUDGET_CATEGORIES) - 1  # 41 ("Other")
+BUD_CONT = BUD_LAST_CAT + 1                          # 42 contingency
+BUD_TOTAL = BUD_CONT + 1                             # 43 total
+ACTUAL_TOTAL_CELL = f"C{BUD_TOTAL}"                  # feeds the Basis Tracker
+
+LOG_SECTION = BUD_TOTAL + 3                          # 46
+LOG_HEADER = LOG_SECTION + 1                         # 47
+LOG_FIRST, LOG_LAST = LOG_HEADER + 1, LOG_HEADER + 100
+
+MATERIAL_FIRST = COMP_ROW["Flooring material"]
+MATERIAL_LAST = COMP_ROW["Stair risers"]
+DISCOUNT_ROW = COMP_ROW["Contractor discount on materials"]
 
 
 def title_bar(ws, text, sub, last_col="G"):
@@ -95,13 +152,8 @@ def money(ws, row, col, value, fmt=CUR, bold=False, fill=None):
 
 # ============================================================ project tabs ==
 def build_project_sheet(ws, cfg):
-    """Shared layout for a project tab. `cfg` carries the real numbers for
-    the flooring project or blanks for the template. Row map (fixed so the
-    HLOOKUP offsets below stay honest):
-
-      5-10  project info          13-24  option comparison
-      27-37 budget vs actual      41+    cost log
-    """
+    """Shared layout for a project tab; row positions come from the module-
+    level layout constants so the Basis Tracker link never drifts."""
     ws.sheet_view.showGridLines = False
     title_bar(ws, cfg["title"], cfg["subtitle"])
 
@@ -137,34 +189,46 @@ def build_project_sheet(ws, cfg):
     dv_status.add("B5")
 
     dv_option = DataValidation(
-        type="list", formula1="=$B$13:$D$13", allow_blank=True
+        type="list", formula1=f"=$B${COMP_HEADER}:$D${COMP_HEADER}", allow_blank=True
     )
     ws.add_data_validation(dv_option)
     dv_option.add("B8")
 
     # ---- step 1: option comparison ----------------------------------------
-    section_bar(ws, 12, "STEP 1 — COMPARE OPTIONS  (estimated all-in cost per option)")
-    head_cell(ws, 13, 1, "Cost component")
+    section_bar(ws, COMP_SECTION,
+                "STEP 1 — COMPARE OPTIONS  (estimated all-in cost per option)")
+    head_cell(ws, COMP_HEADER, 1, "Cost component")
     for j, name in enumerate(cfg["options"]):
-        head_cell(ws, 13, 2 + j, name, fill=BLUE_SOFT)
-    head_cell(ws, 13, 5, "Notes")
+        head_cell(ws, COMP_HEADER, 2 + j, name, fill=BLUE_SOFT)
+    head_cell(ws, COMP_HEADER, 5, "Notes")
 
+    disc = cfg["discount_rate"]
+    r_unit = COMP_ROW["unit"]
+    r_qty = COMP_ROW["qty"]
+    m1, m2 = MATERIAL_FIRST, MATERIAL_LAST
     comparison_rows = [
         ("Item # / SKU", cfg["skus"], None, None),
         (cfg["unit_label"], cfg["unit_prices"], CUR, None),
         (cfg["qty_label"], cfg["qtys"], "#,##0", None),
-        ("Flooring material", "={col}15*{col}16", CUR, None),
+        ("Flooring material", f"={{col}}{r_unit}*{{col}}{r_qty}", CUR, None),
         ("Underlayment & supplies", cfg["underlayment"], CUR, None),
-        ("Est. sales tax (6.25% MA, materials)", "=({col}17+{col}18)*0.0625", CUR, None),
+        ("Stair nose trim", cfg["stair_nose"], CUR, None),
+        ("Stair risers", cfg["stair_risers"], CUR, None),
+        (f"Contractor discount on materials ({disc:.0%})",
+         f"=-{disc}*SUM({{col}}{m1}:{{col}}{m2})", CUR, None),
+        ("Est. sales tax (6.25% MA, materials)",
+         f"=SUM({{col}}{m1}:{{col}}{DISCOUNT_ROW})*0.0625", CUR, None),
         ("Labor — demo & disposal", cfg["labor_demo"], CUR, None),
         ("Labor — install", cfg["labor_install"], CUR, None),
         ("Labor — stairs (treads & risers)", cfg["labor_stairs"], CUR, None),
-        ("TOTAL ESTIMATED", "=SUM({col}17:{col}22)", CUR, GREEN_SOFT),
-        ("Premium vs. cheapest option", "={col}23-MIN($B$23:$D$23)", CUR, GREY_SOFT),
+        ("TOTAL ESTIMATED",
+         f"=SUM({{col}}{m1}:{{col}}{COMP_TOTAL - 1})", CUR, GREEN_SOFT),
+        ("Premium vs. cheapest option",
+         f"={{col}}{COMP_TOTAL}-MIN($B${COMP_TOTAL}:$D${COMP_TOTAL})", CUR, GREY_SOFT),
     ]
     row_notes = cfg["comparison_notes"]
     for i, (label, values, fmt, fill) in enumerate(comparison_rows):
-        r = 14 + i
+        r = COMP_FIRST + i
         lc = ws.cell(row=r, column=1, value=label)
         lc.border = BOX
         lc.font = TOTAL_FONT if label.startswith("TOTAL") else Font(size=10)
@@ -187,7 +251,7 @@ def build_project_sheet(ws, cfg):
                 c.fill = PatternFill("solid", fgColor=fill)
             if label.startswith("TOTAL"):
                 c.font = TOTAL_FONT
-        note = row_notes.get(label)
+        note = row_notes.get(label.split(" (")[0])
         if note:
             nc = ws.cell(row=r, column=5, value=note)
             nc.font = NOTE_FONT
@@ -198,57 +262,55 @@ def build_project_sheet(ws, cfg):
             ws.cell(row=r, column=5).border = BOX
 
     # ---- step 2: budget vs actual ------------------------------------------
-    section_bar(ws, 26, "STEP 2 — BUDGET vs. ACTUAL  (budget auto-fills from the selected option)")
-    for col, text in [(1, "Category"), (2, "Budget"), (3, "Actual (from cost log)"), (4, "Remaining")]:
-        head_cell(ws, 27, col, text)
+    section_bar(ws, BUD_SECTION,
+                "STEP 2 — BUDGET vs. ACTUAL  (budget auto-fills from the selected option)")
+    for col, text in [(1, "Category"), (2, "Budget"),
+                      (3, "Actual (from cost log)"), (4, "Remaining")]:
+        head_cell(ws, BUD_HEADER, col, text)
 
-    # HLOOKUP row offsets into B13:D23 (header row = 1)
-    budget_rows = [
-        ("Flooring materials", 5),
-        ("Underlayment & supplies", 6),
-        ("Sales tax", 7),
-        ("Labor — demo & disposal", 8),
-        ("Labor — install", 9),
-        ("Labor — stairs", 10),
-        ("Permits & fees", None),
-        ("Other", None),
-    ]
-    for i, (label, offset) in enumerate(budget_rows):
-        r = 28 + i
+    lookup = f"$B${COMP_HEADER}:$D${COMP_TOTAL}"
+    for i, (label, comp_label) in enumerate(BUDGET_CATEGORIES):
+        r = BUD_FIRST + i
         lc = ws.cell(row=r, column=1, value=label)
         lc.border = BOX
-        if offset is not None:
-            budget_formula = f'=IF($B$8="","",HLOOKUP($B$8,$B$13:$D$23,{offset},FALSE))'
+        if comp_label is not None:
+            offset = COMP_ROW[comp_label] - COMP_HEADER + 1
+            budget_formula = (f'=IF($B$8="","",'
+                              f'HLOOKUP($B$8,{lookup},{offset},FALSE))')
         else:
             budget_formula = None
         money(ws, r, 2, budget_formula)
-        money(ws, r, 3, f"=SUMIF($D$42:$D$140,$A{r},$E$42:$E$140)")
-        money(ws, r, 4, f"=IF(B{r}=\"\",\"\",B{r}-C{r})")
-    r_cont = 36
-    ws.cell(row=r_cont, column=1, value="Contingency").border = BOX
-    money(ws, r_cont, 2, "=SUM(B28:B35)*$B$9")
-    money(ws, r_cont, 3, None)
-    money(ws, r_cont, 4, "=B36-C36")
-    r_tot = 37
-    tc = ws.cell(row=r_tot, column=1, value="TOTAL")
+        money(ws, r, 3, f"=SUMIF($D${LOG_FIRST}:$D${LOG_LAST},$A{r},"
+                        f"$E${LOG_FIRST}:$E${LOG_LAST})")
+        money(ws, r, 4, f'=IF(B{r}="","",B{r}-C{r})')
+    ws.cell(row=BUD_CONT, column=1, value="Contingency").border = BOX
+    money(ws, BUD_CONT, 2, f"=SUM(B{BUD_FIRST}:B{BUD_LAST_CAT})*$B$9")
+    money(ws, BUD_CONT, 3, None)
+    money(ws, BUD_CONT, 4, f"=B{BUD_CONT}-C{BUD_CONT}")
+    tc = ws.cell(row=BUD_TOTAL, column=1, value="TOTAL")
     tc.font = TOTAL_FONT
     tc.border = BOX
     tc.fill = PatternFill("solid", fgColor=GREEN_SOFT)
-    money(ws, r_tot, 2, "=SUM(B28:B36)", bold=True, fill=GREEN_SOFT)
-    money(ws, r_tot, 3, "=SUM(C28:C36)", bold=True, fill=GREEN_SOFT)
-    money(ws, r_tot, 4, "=B37-C37", bold=True, fill=GREEN_SOFT)
-    ws.cell(row=38, column=1,
-            value="The Actual total (C37) is what feeds the Basis Tracker.").font = NOTE_FONT
+    money(ws, BUD_TOTAL, 2, f"=SUM(B{BUD_FIRST}:B{BUD_CONT})", bold=True, fill=GREEN_SOFT)
+    money(ws, BUD_TOTAL, 3, f"=SUM(C{BUD_FIRST}:C{BUD_CONT})", bold=True, fill=GREEN_SOFT)
+    money(ws, BUD_TOTAL, 4, f"=B{BUD_TOTAL}-C{BUD_TOTAL}", bold=True, fill=GREEN_SOFT)
+    ws.cell(row=BUD_TOTAL + 1, column=1,
+            value=f"The Actual total ({ACTUAL_TOTAL_CELL}) is what feeds the Basis "
+                  "Tracker. Log receipts net of discount, or log the discount as a "
+                  "negative amount under 'Contractor discount'.").font = NOTE_FONT
 
     # ---- step 3: cost log ----------------------------------------------------
-    section_bar(ws, 40, "STEP 3 — COST LOG  (record every payment; Actuals above update automatically)")
+    section_bar(ws, LOG_SECTION,
+                "STEP 3 — COST LOG  (record every payment; Actuals above update automatically)")
     log_heads = ["Date", "Vendor", "Description", "Category", "Amount",
                  "Payment method", "Notes"]
     for col, text in enumerate(log_heads, start=1):
-        head_cell(ws, 41, col, text)
-    dv_cat = DataValidation(type="list", formula1="=$A$28:$A$35", allow_blank=True)
+        head_cell(ws, LOG_HEADER, col, text)
+    dv_cat = DataValidation(
+        type="list", formula1=f"=$A${BUD_FIRST}:$A${BUD_LAST_CAT}", allow_blank=True
+    )
     ws.add_data_validation(dv_cat)
-    for r in range(42, 141):
+    for r in range(LOG_FIRST, LOG_LAST + 1):
         for col in range(1, 8):
             c = ws.cell(row=r, column=col)
             c.border = BOX
@@ -269,7 +331,7 @@ FLOORING_CFG = {
     "subtitle": "4 Indian Brook Road, Ashland, MA 01721",
     "status": "Quoting",
     "contractor": "Footprints Floors of Central MA (ACS Custom Solutions Inc.) — Proposal #25584, 6/30/2026. Labor only; 50% deposit ($4,528.80) before work, balance on completion.",
-    "materials_source": "Floor & Decor, Waltham MA (cart priced 7/2026)",
+    "materials_source": "Floor & Decor, Waltham MA (cart re-priced 7/2026); 5% materials discount through flooring contractor",
     "selected": None,
     "notes": "Labor quote excludes materials. Subfloor leveling/remediation not included and may add cost once carpet is removed. 3% fee on credit card payments (max $3,000/card per project).",
     "options": ["Sapelo Shore", "Big Sur", "Gunstock Oak"],
@@ -277,15 +339,21 @@ FLOORING_CFG = {
     "unit_label": "Price per box",
     "qty_label": "Boxes needed",
     "unit_prices": [61.71, 97.08, 75.57],
-    "qtys": [59, 54, 57],
+    "qtys": [66, 60, 64],
     "underlayment": "=13*59.99",
+    "stair_nose": "=7*29.99",
+    "stair_risers": "=13*20",
+    "discount_rate": 0.05,
     "labor_demo": 2642.30,
     "labor_install": 4535.30,
     "labor_stairs": 1880.00,
     "comparison_notes": {
         "Item # / SKU": "All Floor & Decor. Sapelo Shore & Big Sur: waterproof hybrid resilient plank w/ cork pad, 8mm 7\"x51\". Gunstock Oak: waterproof rigid core LVP.",
         "Underlayment & supplies": "Sentinel Protect Plus underlayment — 13 rolls x $59.99 (100 sqft each), same for every option.",
-        "Est. sales tax (6.25% MA, materials)": "Estimate on materials only; replace with the actual receipt tax when purchased.",
+        "Stair nose trim": "7 stair noses x $29.99.",
+        "Stair risers": "13 risers x $20.00.",
+        "Contractor discount on materials": "5% off all materials through the flooring contractor.",
+        "Est. sales tax (6.25% MA, materials)": "Estimate on discounted materials; replace with the actual receipt tax when purchased.",
         "Labor — demo & disposal": "Footprints: demo carpet, remove & return baseboards, trash removal.",
         "Labor — install": "Footprints: install click-lock floating floor.",
         "Labor — stairs (treads & risers)": "Footprints: treads (open 1 side) + risers.",
@@ -296,7 +364,8 @@ FLOORING_CFG = {
 TEMPLATE_CFG = {
     "title": "PROJECT TEMPLATE — (duplicate this tab for each new project)",
     "subtitle": "How to use: right-click the tab > Duplicate. Rename it, fill in options & quotes, "
-                "then add one row for it in the Basis Tracker improvements table pointing at the new tab's Actual total (cell C37).",
+                "then add one row for it in the Basis Tracker improvements table pointing at the "
+                f"new tab's Actual total (cell {ACTUAL_TOTAL_CELL}).",
     "status": "Planning",
     "contractor": "",
     "materials_source": "",
@@ -309,10 +378,14 @@ TEMPLATE_CFG = {
     "unit_prices": ["", "", ""],
     "qtys": ["", "", ""],
     "underlayment": "",
+    "stair_nose": "",
+    "stair_risers": "",
+    "discount_rate": 0.0,
     "labor_demo": "",
     "labor_install": "",
     "labor_stairs": "",
     "comparison_notes": {
+        "Stair nose trim": "Rename these two rows for whatever extra materials the project needs.",
         "TOTAL ESTIMATED": "Compare options here, pick one in 'Selected option' above, and the budget below fills itself in.",
     },
 }
@@ -370,7 +443,7 @@ def build_basis(ws):
     ws.cell(row=21, column=2, value="Second floor flooring")
     ws.cell(row=21, column=3, value="Tab: 2nd Floor Flooring")
     ws.cell(row=21, column=4, value="Y")
-    money(ws, 21, 5, "='2nd Floor Flooring'!C37")
+    money(ws, 21, 5, f"='2nd Floor Flooring'!{ACTUAL_TOTAL_CELL}")
     dv_yn = DataValidation(type="list", formula1='"Y,N"', allow_blank=True)
     ws.add_data_validation(dv_yn)
     for r in range(21, 41):
@@ -424,10 +497,11 @@ def build_readme(ws):
         ("What this is", "One workbook that tracks what the house cost and every project that adds to it. Share it in Google Drive so both of you can edit."),
         ("", ""),
         ("Basis Tracker", "Purchase price ($1,060,000, closing 7/17/2026) + closing costs + capital improvements = adjusted cost basis. Each project tab feeds one row of the improvements table."),
-        ("2nd Floor Flooring", "First project. Compare the 3 Floor & Decor plank options, pick one in 'Selected option' (yellow cell), and the budget fills in automatically. Log payments in the cost log at the bottom — actuals and the Basis Tracker update themselves."),
-        ("Project Template", "For the next project: right-click the tab > Duplicate, rename it, fill in your options/quotes, then add a row in the Basis Tracker improvements table pointing at the new tab's cell C37 (its Actual total)."),
+        ("2nd Floor Flooring", "First project. Compare the 3 Floor & Decor plank options (incl. underlayment, stair nose & risers, 5% contractor discount, est. tax, and Footprints labor), pick one in 'Selected option' (yellow cell), and the budget fills in automatically. Log payments in the cost log at the bottom — actuals and the Basis Tracker update themselves."),
+        ("Project Template", "For the next project: right-click the tab > Duplicate, rename it, fill in your options/quotes, then add a row in the Basis Tracker improvements table pointing at the new tab's cell "
+                             f"{ACTUAL_TOTAL_CELL} (its Actual total)."),
         ("", ""),
-        ("Sources", "Labor: Footprints Floors of Central MA proposal #25584 (6/30/2026) — $9,057.60, materials excluded. Materials: Floor & Decor Waltham cart — Sapelo Shore / Big Sur / Gunstock Oak + Sentinel underlayment."),
+        ("Sources", "Labor: Footprints Floors of Central MA proposal #25584 (6/30/2026) — $9,057.60, materials excluded. Materials: Floor & Decor Waltham cart (7/2026) — Sapelo Shore / Big Sur / Gunstock Oak + Sentinel underlayment, plus 7 stair noses @ $29.99 and 13 risers @ $20; 5% contractor discount on materials."),
         ("", ""),
         ("Tip", "In Google Sheets everything here — dropdowns, cross-tab formulas, formatting — survives File > Import. Use 'Replace spreadsheet' when importing so tab references stay intact."),
     ]
