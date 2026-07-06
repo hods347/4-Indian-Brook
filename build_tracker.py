@@ -195,8 +195,7 @@ def build_project_sheet(ws, cfg):
     dv_option.add("B8")
 
     # ---- step 1: option comparison ----------------------------------------
-    section_bar(ws, COMP_SECTION,
-                "STEP 1 — COMPARE OPTIONS  (estimated all-in cost per option)")
+    section_bar(ws, COMP_SECTION, "OPTION COMPARISON")
     head_cell(ws, COMP_HEADER, 1, "Cost component")
     for j, name in enumerate(cfg["options"]):
         head_cell(ws, COMP_HEADER, 2 + j, name, fill=BLUE_SOFT)
@@ -262,10 +261,9 @@ def build_project_sheet(ws, cfg):
             ws.cell(row=r, column=5).border = BOX
 
     # ---- step 2: budget vs actual ------------------------------------------
-    section_bar(ws, BUD_SECTION,
-                "STEP 2 — BUDGET vs. ACTUAL  (budget auto-fills from the selected option)")
+    section_bar(ws, BUD_SECTION, "BUDGET vs. ACTUAL")
     for col, text in [(1, "Category"), (2, "Budget"),
-                      (3, "Actual (from cost log)"), (4, "Remaining")]:
+                      (3, "Actual"), (4, "Remaining")]:
         head_cell(ws, BUD_HEADER, col, text)
 
     lookup = f"$B${COMP_HEADER}:$D${COMP_TOTAL}"
@@ -294,14 +292,9 @@ def build_project_sheet(ws, cfg):
     money(ws, BUD_TOTAL, 2, f"=SUM(B{BUD_FIRST}:B{BUD_CONT})", bold=True, fill=GREEN_SOFT)
     money(ws, BUD_TOTAL, 3, f"=SUM(C{BUD_FIRST}:C{BUD_CONT})", bold=True, fill=GREEN_SOFT)
     money(ws, BUD_TOTAL, 4, f"=B{BUD_TOTAL}-C{BUD_TOTAL}", bold=True, fill=GREEN_SOFT)
-    ws.cell(row=BUD_TOTAL + 1, column=1,
-            value=f"The Actual total ({ACTUAL_TOTAL_CELL}) is what feeds the Basis "
-                  "Tracker. Log receipts net of discount, or log the discount as a "
-                  "negative amount under 'Contractor discount'.").font = NOTE_FONT
 
-    # ---- step 3: cost log ----------------------------------------------------
-    section_bar(ws, LOG_SECTION,
-                "STEP 3 — COST LOG  (record every payment; Actuals above update automatically)")
+    # ---- cost log -----------------------------------------------------------
+    section_bar(ws, LOG_SECTION, "COST LOG")
     log_heads = ["Date", "Vendor", "Description", "Category", "Amount",
                  "Payment method", "Notes"]
     for col, text in enumerate(log_heads, start=1):
@@ -349,23 +342,20 @@ FLOORING_CFG = {
     "labor_stairs": 1880.00,
     "comparison_notes": {
         "Item # / SKU": "All Floor & Decor. Sapelo Shore & Big Sur: waterproof hybrid resilient plank w/ cork pad, 8mm 7\"x51\". Gunstock Oak: waterproof rigid core LVP.",
-        "Underlayment & supplies": "Sentinel Protect Plus underlayment — 13 rolls x $59.99 (100 sqft each), same for every option.",
+        "Underlayment & supplies": "Sentinel Protect Plus underlayment — 13 rolls x $59.99 (100 sqft each).",
         "Stair nose trim": "7 stair noses x $29.99.",
         "Stair risers": "13 risers x $20.00.",
         "Contractor discount on materials": "5% off all materials through the flooring contractor.",
-        "Est. sales tax (6.25% MA, materials)": "Estimate on discounted materials; replace with the actual receipt tax when purchased.",
+        "Est. sales tax (6.25% MA, materials)": "Estimate on discounted materials.",
         "Labor — demo & disposal": "Footprints: demo carpet, remove & return baseboards, trash removal.",
         "Labor — install": "Footprints: install click-lock floating floor.",
         "Labor — stairs (treads & risers)": "Footprints: treads (open 1 side) + risers.",
-        "TOTAL ESTIMATED": "Labor $9,057.60 is identical across options, so the spread comes entirely from the plank you pick.",
     },
 }
 
 TEMPLATE_CFG = {
-    "title": "PROJECT TEMPLATE — (duplicate this tab for each new project)",
-    "subtitle": "How to use: right-click the tab > Duplicate. Rename it, fill in options & quotes, "
-                "then add one row for it in the Basis Tracker improvements table pointing at the "
-                f"new tab's Actual total (cell {ACTUAL_TOTAL_CELL}).",
+    "title": "PROJECT TEMPLATE",
+    "subtitle": "",
     "status": "Planning",
     "contractor": "",
     "materials_source": "",
@@ -384,10 +374,7 @@ TEMPLATE_CFG = {
     "labor_demo": "",
     "labor_install": "",
     "labor_stairs": "",
-    "comparison_notes": {
-        "Stair nose trim": "Rename these two rows for whatever extra materials the project needs.",
-        "TOTAL ESTIMATED": "Compare options here, pick one in 'Selected option' above, and the budget below fills itself in.",
-    },
+    "comparison_notes": {},
 }
 
 
@@ -404,18 +391,18 @@ def build_basis(ws):
     d.number_format = DATE_FMT
     d.border = BOX
 
-    section_bar(ws, 8, "1 — ACQUISITION COSTS  (purchase price + closing costs added to basis)", last_col="F")
+    section_bar(ws, 8, "ACQUISITION COSTS", last_col="F")
     head_cell(ws, 9, 1, "Item")
     head_cell(ws, 9, 2, "Amount")
     head_cell(ws, 9, 3, "Notes")
     ws.merge_cells("C9:F9")
     acq_items = [
         ("Purchase price", 1060000, ""),
-        ("Attorney / legal fees", None, "From the closing disclosure"),
+        ("Attorney / legal fees", None, ""),
         ("Owner's title insurance", None, ""),
         ("Recording fees", None, ""),
         ("Survey / plot plan", None, ""),
-        ("Transfer taxes paid by buyer (if any)", None, "In MA the seller usually pays deed stamps"),
+        ("Transfer taxes paid by buyer (if any)", None, ""),
         ("Other closing costs added to basis", None, ""),
     ]
     for i, (label, amt, note) in enumerate(acq_items):
@@ -434,7 +421,7 @@ def build_basis(ws):
     c.fill = PatternFill("solid", fgColor=BLUE_SOFT)
     money(ws, r_acq, 2, "=SUM(B10:B16)", bold=True, fill=BLUE_SOFT)
 
-    section_bar(ws, 19, "2 — CAPITAL IMPROVEMENTS  (auto-fed from each project tab's Actual total)", last_col="F")
+    section_bar(ws, 19, "CAPITAL IMPROVEMENTS", last_col="F")
     heads = ["Date completed", "Project", "Where tracked", "Capital? (Y/N)", "Cost"]
     for col, text in enumerate(heads, start=1):
         head_cell(ws, 20, col, text)
@@ -471,16 +458,6 @@ def build_basis(ws):
     tc = money(ws, 43, 4, "=B17+E41", fmt=CUR0, bold=True, fill=YELLOW_SOFT)
     tc.font = Font(bold=True, size=14)
     ws.merge_cells("D43:E43")
-
-    notes = [
-        "Only capital improvements (things that add value or extend the property's life) add to basis — new floors yes, repainting a room no.",
-        "Set Capital? to N for repairs you still want to track; they'll be listed but excluded from the basis total.",
-        "Keep receipts and contracts for everything on this sheet. This is a tracking aid, not tax advice.",
-    ]
-    for i, n in enumerate(notes):
-        c = ws.cell(row=45 + i, column=1, value="• " + n)
-        c.font = NOTE_FONT
-        ws.merge_cells(start_row=45 + i, start_column=1, end_row=45 + i, end_column=6)
 
     widths = {"A": 36, "B": 24, "C": 24, "D": 15, "E": 15, "F": 24}
     for col, w in widths.items():
