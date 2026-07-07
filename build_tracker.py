@@ -381,18 +381,19 @@ TEMPLATE_CFG = {
 # ========================================================= project estimates ==
 def build_estimates(ws):
     """Preliminary quote log — one row per quote, before a project graduates
-    to its own full tab."""
+    to its own full tab. Count? = Y marks the quote that should roll into the
+    totals, so competing quotes for the same project don't double-count."""
     ws.sheet_view.showGridLines = False
-    title_bar(ws, "PROJECT ESTIMATES", "4 Indian Brook Road, Ashland, MA 01721")
+    title_bar(ws, "PROJECT ESTIMATES", "4 Indian Brook Road, Ashland, MA 01721", last_col="H")
 
-    ws.cell(row=4, column=1, value="Total estimated — all").font = LABEL_FONT
-    money(ws, 4, 2, "=SUM(E9:E58)")
-    ws.cell(row=5, column=1, value="Total estimated — marked Now").font = LABEL_FONT
-    money(ws, 5, 2, '=SUMIF(F9:F58,"Now",E9:E58)')
+    ws.cell(row=4, column=1, value="Total estimated — counted quotes").font = LABEL_FONT
+    money(ws, 4, 2, '=SUMIFS(E9:E58,G9:G58,"Y")')
+    ws.cell(row=5, column=1, value="Total estimated — counted & marked Now").font = LABEL_FONT
+    money(ws, 5, 2, '=SUMIFS(E9:E58,G9:G58,"Y",F9:F58,"Now")')
 
-    section_bar(ws, 7, "QUOTES")
+    section_bar(ws, 7, "QUOTES", last_col="H")
     heads = ["Project", "Category", "Contractor / vendor", "Quote date",
-             "Est. cost", "Timing", "Notes"]
+             "Est. cost", "Timing", "Count?", "Notes"]
     for col, text in enumerate(heads, start=1):
         head_cell(ws, 8, col, text)
 
@@ -403,25 +404,170 @@ def build_estimates(ws):
     for i, (project, category) in enumerate(starters):
         ws.cell(row=9 + i, column=1, value=project)
         ws.cell(row=9 + i, column=2, value=category)
+        ws.cell(row=9 + i, column=7, value="Y")
 
     dv_timing = DataValidation(
         type="list", formula1='"Now,Later,Undecided,Passed"', allow_blank=True
     )
+    dv_count = DataValidation(type="list", formula1='"Y,N"', allow_blank=True)
     ws.add_data_validation(dv_timing)
+    ws.add_data_validation(dv_count)
     for r in range(9, 59):
-        for col in range(1, 8):
+        for col in range(1, 9):
             c = ws.cell(row=r, column=col)
             c.border = BOX
             if col == 4:
                 c.number_format = DATE_FMT
             if col == 5:
                 c.number_format = CUR
+            if col == 7:
+                c.alignment = Alignment(horizontal="center")
         dv_timing.add(f"F{r}")
+        dv_count.add(f"G{r}")
 
-    widths = {"A": 28, "B": 16, "C": 26, "D": 13, "E": 14, "F": 12, "G": 36}
+    widths = {"A": 28, "B": 16, "C": 26, "D": 13, "E": 14, "F": 12, "G": 9, "H": 36}
     for col, w in widths.items():
         ws.column_dimensions[col].width = w
     ws.freeze_panes = "A9"
+
+
+# ================================================================== vendors ==
+def build_vendors(ws):
+    ws.sheet_view.showGridLines = False
+    title_bar(ws, "VENDORS & CONTACTS", "4 Indian Brook Road, Ashland, MA 01721", last_col="H")
+
+    section_bar(ws, 4, "DIRECTORY", last_col="H")
+    heads = ["Company", "Trade / service", "Contact", "Phone", "Email",
+             "Used for", "Use again?", "Notes"]
+    for col, text in enumerate(heads, start=1):
+        head_cell(ws, 5, col, text)
+
+    starters = [
+        ("Footprints Floors of Central MA", "Flooring install",
+         "S. Donohoe", "(508) 422-4545", "sdonohoe@footprintsfloors.com",
+         "2nd floor flooring", "", "ACS Custom Solutions Inc.; proposal #25584"),
+        ("Floor & Decor — Waltham", "Flooring materials",
+         "", "", "", "2nd floor flooring materials", "", ""),
+    ]
+    for i, row in enumerate(starters):
+        for col, val in enumerate(row, start=1):
+            ws.cell(row=6 + i, column=col, value=val or None)
+
+    dv_again = DataValidation(type="list", formula1='"Y,N"', allow_blank=True)
+    ws.add_data_validation(dv_again)
+    for r in range(6, 46):
+        for col in range(1, 9):
+            c = ws.cell(row=r, column=col)
+            c.border = BOX
+            if col == 7:
+                c.alignment = Alignment(horizontal="center")
+        dv_again.add(f"G{r}")
+
+    widths = {"A": 30, "B": 18, "C": 16, "D": 16, "E": 30, "F": 24, "G": 11, "H": 34}
+    for col, w in widths.items():
+        ws.column_dimensions[col].width = w
+    ws.freeze_panes = "A6"
+
+
+# ====================================================== finishes & materials ==
+def build_finishes(ws):
+    ws.sheet_view.showGridLines = False
+    title_bar(ws, "FINISHES & MATERIALS", "4 Indian Brook Road, Ashland, MA 01721", last_col="H")
+
+    section_bar(ws, 4, "RECORD", last_col="H")
+    heads = ["Room / area", "Item", "Brand / product", "Color / finish",
+             "SKU / code", "Where purchased", "Date", "Notes"]
+    for col, text in enumerate(heads, start=1):
+        head_cell(ws, 5, col, text)
+
+    starters = [
+        ("Second floor", "Flooring — LVP", "", "", "", "Floor & Decor — Waltham", "", ""),
+    ]
+    for i, row in enumerate(starters):
+        for col, val in enumerate(row, start=1):
+            ws.cell(row=6 + i, column=col, value=val or None)
+
+    for r in range(6, 56):
+        for col in range(1, 9):
+            c = ws.cell(row=r, column=col)
+            c.border = BOX
+            if col == 7:
+                c.number_format = DATE_FMT
+
+    widths = {"A": 20, "B": 20, "C": 24, "D": 20, "E": 16, "F": 24, "G": 13, "H": 34}
+    for col, w in widths.items():
+        ws.column_dimensions[col].width = w
+    ws.freeze_panes = "A6"
+
+
+# ====================================================== appliances & systems ==
+# (item, location, typical lifespan yrs, service cadence)
+APPLIANCE_ITEMS = [
+    ("Heating system (furnace / boiler)", "Basement", 20,
+     "Annual tune-up; replace filters every 1-3 months (forced air)"),
+    ("Central A/C / heat pump", "Exterior + attic", 15,
+     "Annual tune-up; keep outdoor unit clear"),
+    ("Water heater", "Basement", 12, "Flush tank annually; test T&P valve"),
+    ("Refrigerator", "Kitchen", 13, "Vacuum coils annually"),
+    ("Range / oven", "Kitchen", 15, ""),
+    ("Dishwasher", "Kitchen", 10, "Clean filter quarterly"),
+    ("Microwave", "Kitchen", 9, ""),
+    ("Washer", "Laundry", 11, "Inspect supply hoses annually"),
+    ("Dryer", "Laundry", 13, "Clean vent duct annually; lint trap every load"),
+    ("Garbage disposal", "Kitchen", 10, ""),
+    ("Sump pump", "Basement", 10, "Test quarterly; check before spring thaw"),
+    ("Roof (asphalt shingle)", "Exterior", 25, "Inspect annually and after major storms"),
+    ("Gutters & downspouts", "Exterior", 20, "Clean spring and fall"),
+    ("Windows", "Whole house", 25, "Check seals/caulk annually"),
+    ("Deck / porch", "Exterior", 20, "Reseal or restain every 2-3 years"),
+    ("Garage door & opener", "Garage", 12, "Lubricate tracks/rollers annually"),
+    ("Smoke / CO detectors", "Whole house", 10,
+     "Test monthly; replace batteries annually"),
+    ("Septic system (if applicable)", "Exterior", 30,
+     "Pump every 2-3 years; Title 5 inspection at sale"),
+    ("Irrigation system (if applicable)", "Exterior", 20,
+     "Winterize every fall; startup check in spring"),
+]
+
+
+def build_appliances(ws):
+    ws.sheet_view.showGridLines = False
+    title_bar(ws, "APPLIANCES & SYSTEMS", "4 Indian Brook Road, Ashland, MA 01721", last_col="K")
+
+    section_bar(ws, 4, "INVENTORY", last_col="K")
+    heads = ["Item", "Location", "Make & model", "Serial #", "Install date",
+             "Warranty expires", "Typical lifespan (yrs)",
+             "Suggested replacement", "Service cadence", "Last serviced", "Notes"]
+    for col, text in enumerate(heads, start=1):
+        head_cell(ws, 5, col, text)
+
+    first, last = 6, 6 + len(APPLIANCE_ITEMS) + 10  # seeded rows + spares
+    for i, (item, loc, life, cadence) in enumerate(APPLIANCE_ITEMS):
+        r = first + i
+        ws.cell(row=r, column=1, value=item)
+        ws.cell(row=r, column=2, value=loc)
+        ws.cell(row=r, column=7, value=life)
+        ws.cell(row=r, column=9, value=cadence or None)
+
+    for r in range(first, last + 1):
+        for col in range(1, 12):
+            c = ws.cell(row=r, column=col)
+            c.border = BOX
+            if col in (5, 6, 8, 10):
+                c.number_format = DATE_FMT
+            if col == 7:
+                c.alignment = Alignment(horizontal="center")
+            if col == 9:
+                c.alignment = Alignment(wrap_text=True, vertical="center")
+        # suggested replacement = install date + typical lifespan
+        ws.cell(row=r, column=8,
+                value=f'=IF(OR(E{r}="",G{r}=""),"",EDATE(E{r},12*G{r}))')
+
+    widths = {"A": 30, "B": 15, "C": 22, "D": 16, "E": 13, "F": 13, "G": 10,
+              "H": 14, "I": 40, "J": 13, "K": 26}
+    for col, w in widths.items():
+        ws.column_dimensions[col].width = w
+    ws.freeze_panes = "A6"
 
 
 # ============================================================ basis tracker ==
@@ -521,7 +667,10 @@ def build_readme(ws):
         ("", ""),
         ("Basis Tracker", "Purchase price ($1,060,000, closing 7/17/2026) + closing costs + capital improvements = adjusted cost basis. Each project tab feeds one row of the improvements table."),
         ("2nd Floor Flooring", "First project. Compare the 3 Floor & Decor plank options (incl. underlayment, stair nose & risers, 5% contractor discount, est. tax, and Footprints labor), pick one in 'Selected option' (yellow cell), and the budget fills in automatically. Log payments in the cost log at the bottom — actuals and the Basis Tracker update themselves."),
-        ("Project Estimates", "Preliminary phase: log each quote you collect (HVAC, carpentry, etc.) with its estimated cost, and mark Timing (Now / Later / Undecided / Passed) to decide what to take on. When a project is a go, give it its own tab from the template."),
+        ("Project Estimates", "Preliminary phase: log each quote you collect (HVAC, carpentry, etc.) with its estimated cost, and mark Timing (Now / Later / Undecided / Passed) to decide what to take on. Set Count? to Y on the one quote per project you'd actually use — competing quotes marked N stay listed but don't double-count in the totals. When a project is a go, give it its own tab from the template."),
+        ("Vendors & Contacts", "Directory of contractors, suppliers, and service companies used on the house."),
+        ("Finishes & Materials", "Room-by-room record of paint colors, flooring, fixtures, and their SKUs — for touch-ups and matching repairs later."),
+        ("Appliances & Systems", "Inventory of the house's equipment with make/model/serial, warranty dates, and service cadence. Enter an install date and the suggested replacement date computes from the typical lifespan."),
         ("Project Template", "For the next project: right-click the tab > Duplicate, rename it, fill in your options/quotes, then add a row in the Basis Tracker improvements table pointing at the new tab's cell "
                              f"{ACTUAL_TOTAL_CELL} (its Actual total)."),
         ("", ""),
@@ -549,18 +698,27 @@ def main():
     ws_floor = wb.create_sheet("2nd Floor Flooring")
     ws_est = wb.create_sheet("Project Estimates")
     ws_tmpl = wb.create_sheet("Project Template")
+    ws_vend = wb.create_sheet("Vendors & Contacts")
+    ws_fin = wb.create_sheet("Finishes & Materials")
+    ws_appl = wb.create_sheet("Appliances & Systems")
     ws_readme = wb.create_sheet("Read Me")
 
     build_basis(ws_basis)
     build_project_sheet(ws_floor, FLOORING_CFG)
     build_estimates(ws_est)
     build_project_sheet(ws_tmpl, TEMPLATE_CFG)
+    build_vendors(ws_vend)
+    build_finishes(ws_fin)
+    build_appliances(ws_appl)
     build_readme(ws_readme)
 
     ws_basis.sheet_properties.tabColor = GOLD
     ws_floor.sheet_properties.tabColor = NAVY
     ws_est.sheet_properties.tabColor = NAVY_LIGHT
     ws_tmpl.sheet_properties.tabColor = "A6A6A6"
+    ws_vend.sheet_properties.tabColor = "548235"
+    ws_fin.sheet_properties.tabColor = "548235"
+    ws_appl.sheet_properties.tabColor = "548235"
     ws_readme.sheet_properties.tabColor = "808080"
 
     wb.save(OUT)
