@@ -56,7 +56,6 @@ COMPARISON_LABELS = [
     "unit",                  # 1  (label text comes from cfg)
     "qty",                   # 2
     "Flooring material",     # 3  -- materials block starts here
-    "Underlayment & supplies",
     "Stair nose trim",
     "Stair risers",
     "Contractor discount on materials",
@@ -70,7 +69,6 @@ COMPARISON_LABELS = [
 # budget categories -> comparison label they pull their number from
 BUDGET_CATEGORIES = [
     ("Flooring materials", "Flooring material"),
-    ("Underlayment & supplies", "Underlayment & supplies"),
     ("Stair nose trim", "Stair nose trim"),
     ("Stair risers", "Stair risers"),
     ("Contractor discount", "Contractor discount on materials"),
@@ -210,7 +208,6 @@ def build_project_sheet(ws, cfg):
         (cfg["unit_label"], cfg["unit_prices"], CUR, None),
         (cfg["qty_label"], cfg["qtys"], "#,##0", None),
         ("Flooring material", f"={{col}}{r_unit}*{{col}}{r_qty}", CUR, None),
-        ("Underlayment & supplies", cfg["underlayment"], CUR, None),
         ("Stair nose trim", cfg["stair_nose"], CUR, None),
         ("Stair risers", cfg["stair_risers"], CUR, None),
         (f"Contractor discount on materials ({disc:.0%})",
@@ -333,7 +330,6 @@ FLOORING_CFG = {
     "qty_label": "Boxes needed",
     "unit_prices": [61.71, 97.08, 75.57],
     "qtys": [66, 60, 64],
-    "underlayment": "=15*59.99",
     "stair_nose": "=7*29.99",
     "stair_risers": "=13*20",
     "discount_rate": 0.05,
@@ -341,8 +337,7 @@ FLOORING_CFG = {
     "labor_install": 4535.30,
     "labor_stairs": 1880.00,
     "comparison_notes": {
-        "Item # / SKU": "All Floor & Decor. Sapelo Shore & Big Sur: waterproof hybrid resilient plank w/ cork pad, 8mm 7\"x51\". Gunstock Oak: waterproof rigid core LVP.",
-        "Underlayment & supplies": "Sentinel Protect Plus underlayment — 15 rolls x $59.99 (100 sqft each).",
+        "Item # / SKU": "All Floor & Decor. Sapelo Shore & Big Sur: waterproof hybrid resilient plank w/ cork pad, 8mm 7\"x51\". Gunstock Oak: waterproof rigid core LVP. Underlayment attached — no separate order.",
         "Stair nose trim": "7 stair noses x $29.99.",
         "Stair risers": "13 risers x $20.00.",
         "Contractor discount on materials": "5% off all materials through the flooring contractor.",
@@ -367,7 +362,6 @@ TEMPLATE_CFG = {
     "qty_label": "Quantity",
     "unit_prices": ["", "", ""],
     "qtys": ["", "", ""],
-    "underlayment": "",
     "stair_nose": "",
     "stair_risers": "",
     "discount_rate": 0.0,
@@ -666,7 +660,7 @@ def build_readme(ws):
         ("What this is", "One workbook that tracks what the house cost and every project that adds to it. Share it in Google Drive so both of you can edit."),
         ("", ""),
         ("Basis Tracker", "Purchase price ($1,060,000, closing 7/17/2026) + closing costs + capital improvements = adjusted cost basis. Each project tab feeds one row of the improvements table."),
-        ("2nd Floor Flooring", "First project. Compare the 3 Floor & Decor plank options (incl. underlayment, stair nose & risers, 5% contractor discount, est. tax, and Footprints labor), pick one in 'Selected option' (yellow cell), and the budget fills in automatically. Log payments in the cost log at the bottom — actuals and the Basis Tracker update themselves."),
+        ("2nd Floor Flooring", "First project. Compare the 3 Floor & Decor plank options (incl. stair nose & risers, 5% contractor discount, est. tax, and Footprints labor), pick one in 'Selected option' (yellow cell), and the budget fills in automatically. Log payments in the cost log at the bottom — actuals and the Basis Tracker update themselves."),
         ("Project Estimates", "Preliminary phase: log each quote you collect (HVAC, carpentry, etc.) with its estimated cost, and mark Timing (Now / Later / Undecided / Passed) to decide what to take on. Set Count? to Y on the one quote per project you'd actually use — competing quotes marked N stay listed but don't double-count in the totals. When a project is a go, give it its own tab from the template."),
         ("Vendors & Contacts", "Directory of contractors, suppliers, and service companies used on the house."),
         ("Finishes & Materials", "Room-by-room record of paint colors, flooring, fixtures, and their SKUs — for touch-ups and matching repairs later."),
@@ -674,7 +668,7 @@ def build_readme(ws):
         ("Project Template", "For the next project: right-click the tab > Duplicate, rename it, fill in your options/quotes, then add a row in the Basis Tracker improvements table pointing at the new tab's cell "
                              f"{ACTUAL_TOTAL_CELL} (its Actual total)."),
         ("", ""),
-        ("Sources", "Labor: Footprints Floors of Central MA proposal #25584 (6/30/2026) — $9,057.60, materials excluded. Materials: Floor & Decor Waltham cart (7/2026) — Sapelo Shore / Big Sur / Gunstock Oak + Sentinel underlayment (15 rolls), plus 7 stair noses @ $29.99 and 13 risers @ $20; 5% contractor discount on materials."),
+        ("Sources", "Labor: Footprints Floors of Central MA proposal #25584 (6/30/2026) — $9,057.60, materials excluded. Materials: Floor & Decor Waltham cart (7/2026) — Sapelo Shore / Big Sur / Gunstock Oak (underlayment attached to plank), plus 7 stair noses @ $29.99 and 13 risers @ $20; 5% contractor discount on materials."),
         ("", ""),
         ("Tip", "In Google Sheets everything here — dropdowns, cross-tab formulas, formatting — survives File > Import. Use 'Replace spreadsheet' when importing so tab references stay intact."),
     ]
