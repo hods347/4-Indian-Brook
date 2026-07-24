@@ -565,6 +565,37 @@ def build_appliances(ws):
 
 
 # ============================================================ basis tracker ==
+# Borrower-paid closing costs from the Closing Disclosure (7/13/2026), in the
+# order they appear on page 2. "basis" = default flag for whether the item is
+# added to cost basis (a starting point to confirm with a tax preparer).
+# Seller-paid items (attorney's fees, some couriers, MA deed excise, realtor
+# commissions) are excluded — they are not the buyer's costs.
+CLOSING_COSTS = [
+    ("Loan underwriting fee", 795.00, "N", "Loan cost"),
+    ("Appraisal fee", 750.00, "N", "Loan cost"),
+    ("Credit report", 319.00, "N", "Loan cost"),
+    ("Flood certification", 5.00, "N", "Loan cost"),
+    ("Loan Safe report", 6.30, "N", "Loan cost"),
+    ("Lender's title insurance", 1988.00, "N", "Loan cost — protects lender"),
+    ("Closing protection letter", 25.00, "Y", "Title service"),
+    ("Courier fee (FedEx)", 100.00, "Y", "Settlement service"),
+    ("Document preparation fee", 100.00, "Y", "Deed / document prep"),
+    ("E-recording fee", 19.00, "Y", "Recording"),
+    ("Municipal lien certificate", 50.00, "Y", "Title — Town of Ashland"),
+    ("Plot plan / survey", 150.00, "Y", "Survey — Boston Survey"),
+    ("Settlement fee", 700.00, "Y", "Settlement / closing"),
+    ("Title examination", 325.00, "Y", "Title"),
+    ("Recording fee — deed", 155.00, "Y", "Deed recording"),
+    ("Recording fee — mortgage", 205.00, "N", "Loan cost"),
+    ("Recording fee — additional", 120.00, "Y", "Balance of the $480 gov't recording line"),
+    ("Owner's title insurance", 3222.00, "Y", "Owner's policy (optional)"),
+    ("Homeowner's insurance (12 mo, prepaid)", 3951.00, "N", "Prepaid — not basis"),
+    ("Prepaid interest (7/17–8/1)", 2082.75, "N", "Prepaid loan interest"),
+    ("Property taxes (3 mo, prepaid)", 2922.51, "N", "Prepaid — not basis"),
+    ("Property taxes escrow (2 mo)", 1948.34, "N", "Escrow deposit — not basis"),
+]
+
+
 def build_basis(ws):
     ws.sheet_view.showGridLines = False
     title_bar(ws, "COST BASIS TRACKER", "4 Indian Brook Road, Ashland, MA 01721", last_col="F")
@@ -577,75 +608,106 @@ def build_basis(ws):
     d.number_format = DATE_FMT
     d.border = BOX
 
-    section_bar(ws, 8, "ACQUISITION COSTS", last_col="F")
-    head_cell(ws, 9, 1, "Item")
-    head_cell(ws, 9, 2, "Amount")
-    head_cell(ws, 9, 3, "Notes")
-    ws.merge_cells("C9:F9")
-    acq_items = [
-        ("Purchase price", 1060000, ""),
-        ("Attorney / legal fees", None, ""),
-        ("Owner's title insurance", None, ""),
-        ("Recording fees", None, ""),
-        ("Survey / plot plan", None, ""),
-        ("Transfer taxes paid by buyer (if any)", None, ""),
-        ("Other closing costs added to basis", None, ""),
-    ]
-    for i, (label, amt, note) in enumerate(acq_items):
-        r = 10 + i
+    # ---- closing costs (per the Closing Disclosure) -----------------------
+    section_bar(ws, 8, "CLOSING COSTS  (borrower-paid, per Closing Disclosure 7/13/2026)", last_col="F")
+    for col, text in [(1, "Item"), (2, "Amount"), (3, "Adds to basis? (Y/N)")]:
+        head_cell(ws, 9, col, text)
+    head_cell(ws, 9, 4, "Notes")
+    ws.merge_cells("D9:F9")
+
+    cc_first = 10
+    cc_last = cc_first + len(CLOSING_COSTS) - 1
+    dv_basis = DataValidation(type="list", formula1='"Y,N"', allow_blank=True)
+    ws.add_data_validation(dv_basis)
+    for i, (label, amt, flag, note) in enumerate(CLOSING_COSTS):
+        r = cc_first + i
         lc = ws.cell(row=r, column=1, value=label)
         lc.border = BOX
-        money(ws, r, 2, amt, fmt=CUR0 if r == 10 else CUR)
-        nc = ws.cell(row=r, column=3, value=note)
+        money(ws, r, 2, amt, fmt=CUR)
+        fc = ws.cell(row=r, column=3, value=flag)
+        fc.border = BOX
+        fc.alignment = Alignment(horizontal="center")
+        dv_basis.add(f"C{r}")
+        nc = ws.cell(row=r, column=4, value=note)
         nc.font = NOTE_FONT
         nc.border = BOX
-        ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=6)
-    r_acq = 17
-    c = ws.cell(row=r_acq, column=1, value="Subtotal — acquisition basis")
+        ws.merge_cells(start_row=r, start_column=4, end_row=r, end_column=6)
+
+    r_cc_all = cc_last + 1        # total closing costs (reconciles to CD)
+    c = ws.cell(row=r_cc_all, column=1, value="Total closing costs (borrower-paid)")
+    c.border = BOX
+    money(ws, r_cc_all, 2, f"=SUM(B{cc_first}:B{cc_last})")
+    r_cc_basis = cc_last + 2      # closing costs that add to basis
+    c = ws.cell(row=r_cc_basis, column=1, value="Closing costs added to basis")
     c.font = TOTAL_FONT
     c.border = BOX
     c.fill = PatternFill("solid", fgColor=BLUE_SOFT)
-    money(ws, r_acq, 2, "=SUM(B10:B16)", bold=True, fill=BLUE_SOFT)
+    money(ws, r_cc_basis, 2,
+          f'=SUMIF(C{cc_first}:C{cc_last},"Y",B{cc_first}:B{cc_last})',
+          bold=True, fill=BLUE_SOFT)
 
-    section_bar(ws, 19, "CAPITAL IMPROVEMENTS", last_col="F")
+    r_acq = cc_last + 4           # acquisition basis = price + basis closing costs
+    ws.merge_cells(f"A{r_acq}:A{r_acq}")
+    c = ws.cell(row=r_acq, column=1, value="ACQUISITION BASIS  (purchase price + basis closing costs)")
+    c.font = TOTAL_FONT
+    c.border = BOX
+    c.fill = PatternFill("solid", fgColor=BLUE_SOFT)
+    money(ws, r_acq, 2, f"=B5+B{r_cc_basis}", bold=True, fill=BLUE_SOFT)
+
+    # ---- capital improvements ---------------------------------------------
+    imp_sec = r_acq + 2
+    section_bar(ws, imp_sec, "CAPITAL IMPROVEMENTS", last_col="F")
+    imp_head = imp_sec + 1
     heads = ["Date completed", "Project", "Where tracked", "Capital? (Y/N)", "Cost"]
     for col, text in enumerate(heads, start=1):
-        head_cell(ws, 20, col, text)
+        head_cell(ws, imp_head, col, text)
+    imp_first = imp_head + 1
+    imp_last = imp_first + 19
     # first project, wired to the flooring tab's actual total
-    ws.cell(row=21, column=1).number_format = DATE_FMT
-    ws.cell(row=21, column=2, value="Second floor flooring")
-    ws.cell(row=21, column=3, value="Tab: 2nd Floor Flooring")
-    ws.cell(row=21, column=4, value="Y")
-    money(ws, 21, 5, f"='2nd Floor Flooring'!{ACTUAL_TOTAL_CELL}")
+    ws.cell(row=imp_first, column=1).number_format = DATE_FMT
+    ws.cell(row=imp_first, column=2, value="Second floor flooring")
+    ws.cell(row=imp_first, column=3, value="Tab: 2nd Floor Flooring")
+    ws.cell(row=imp_first, column=4, value="Y")
+    money(ws, imp_first, 5, f"='2nd Floor Flooring'!{ACTUAL_TOTAL_CELL}")
     dv_yn = DataValidation(type="list", formula1='"Y,N"', allow_blank=True)
     ws.add_data_validation(dv_yn)
-    for r in range(21, 41):
+    for r in range(imp_first, imp_last + 1):
         for col in range(1, 6):
             c = ws.cell(row=r, column=col)
             c.border = BOX
             if col == 1:
                 c.number_format = DATE_FMT
-            if col == 5 and r > 21:
+            if col == 5 and r > imp_first:
                 c.number_format = CUR
         dv_yn.add(f"D{r}")
-    r_imp = 41
+    r_imp = imp_last + 1
     c = ws.cell(row=r_imp, column=1, value="Subtotal — capital improvements")
     c.font = TOTAL_FONT
     c.border = BOX
     c.fill = PatternFill("solid", fgColor=BLUE_SOFT)
-    money(ws, r_imp, 5, '=SUMIF(D21:D40,"Y",E21:E40)', bold=True, fill=BLUE_SOFT)
+    money(ws, r_imp, 5, f'=SUMIF(D{imp_first}:D{imp_last},"Y",E{imp_first}:E{imp_last})',
+          bold=True, fill=BLUE_SOFT)
 
-    ws.merge_cells("A43:C43")
-    c = ws.cell(row=43, column=1, value="ADJUSTED COST BASIS")
+    # ---- adjusted cost basis ----------------------------------------------
+    r_adj = r_imp + 2
+    ws.merge_cells(f"A{r_adj}:C{r_adj}")
+    c = ws.cell(row=r_adj, column=1, value="ADJUSTED COST BASIS")
     c.font = Font(bold=True, size=14, color="FFFFFF")
     c.fill = PatternFill("solid", fgColor=GOLD)
     c.alignment = Alignment(vertical="center", indent=1)
-    ws.row_dimensions[43].height = 26
-    tc = money(ws, 43, 4, "=B17+E41", fmt=CUR0, bold=True, fill=YELLOW_SOFT)
+    ws.row_dimensions[r_adj].height = 26
+    tc = money(ws, r_adj, 4, f"=B{r_acq}+E{r_imp}", fmt=CUR0, bold=True, fill=YELLOW_SOFT)
     tc.font = Font(bold=True, size=14)
-    ws.merge_cells("D43:E43")
+    ws.merge_cells(f"D{r_adj}:E{r_adj}")
 
-    widths = {"A": 36, "B": 24, "C": 24, "D": 15, "E": 15, "F": 24}
+    note = ws.cell(row=r_adj + 2, column=1,
+                   value="Seller-paid items (MA deed excise $4,856.40, realtor commissions "
+                         "$63,900, attorney's fees, etc.) are excluded. The Adds-to-basis "
+                         "flags are a starting point — confirm with your tax preparer.")
+    note.font = NOTE_FONT
+    ws.merge_cells(start_row=r_adj + 2, start_column=1, end_row=r_adj + 2, end_column=6)
+
+    widths = {"A": 40, "B": 20, "C": 18, "D": 15, "E": 15, "F": 24}
     for col, w in widths.items():
         ws.column_dimensions[col].width = w
     ws.freeze_panes = "A3"
@@ -659,7 +721,7 @@ def build_readme(ws):
         ("", ""),
         ("What this is", "One workbook that tracks what the house cost and every project that adds to it. Share it in Google Drive so both of you can edit."),
         ("", ""),
-        ("Basis Tracker", "Purchase price ($1,060,000, closing 7/17/2026) + closing costs + capital improvements = adjusted cost basis. Each project tab feeds one row of the improvements table."),
+        ("Basis Tracker", "Purchase price ($1,060,000, closing 7/17/2026) + basis-adding closing costs + capital improvements = adjusted cost basis. Closing costs are itemized from the Closing Disclosure with an Adds-to-basis flag; each project tab feeds one row of the improvements table."),
         ("2nd Floor Flooring", "First project. Compare the 3 Floor & Decor plank options (incl. stair nose & risers, 5% contractor discount, est. tax, and Footprints labor), pick one in 'Selected option' (yellow cell), and the budget fills in automatically. Log payments in the cost log at the bottom — actuals and the Basis Tracker update themselves."),
         ("Project Estimates", "Preliminary phase: log each quote you collect (HVAC, carpentry, etc.) with its estimated cost, and mark Timing (Now / Later / Undecided / Passed) to decide what to take on. Set Count? to Y on the one quote per project you'd actually use — competing quotes marked N stay listed but don't double-count in the totals. When a project is a go, give it its own tab from the template."),
         ("Vendors & Contacts", "Directory of contractors, suppliers, and service companies used on the house."),
